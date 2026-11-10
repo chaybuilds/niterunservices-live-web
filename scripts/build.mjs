@@ -2,7 +2,7 @@ import {mkdir,writeFile,rm,copyFile} from 'node:fs/promises';
 import {join,resolve,dirname} from 'node:path';
 
 const DIST=resolve('dist');
-const HOST='https://niterunservices.com';
+const HOST='https://chaybuilds.github.io/niterunservices-live-web';
 const API='https://succvbtctjkzsowotcsy.supabase.co/functions/v1/services-intake';
 const CITIES=[
  {slug:'wilmington',name:'Wilmington',region:'Coastal NC',hint:'Homes, condos, rentals and local properties'},
