@@ -3,6 +3,34 @@ const VALID_SERVICES=new Set(['cleaning','detailing','washing','holiday-lights']
 const VALID_CITIES=new Set(['wilmington','raleigh','charlotte']);
 const VALID_TIMING=new Set(['asap','week','month','flexible']);
 const API_TIMEOUT_MS=13000;
+const READINESS_TIMEOUT_MS=4000;
+
+// Read-only, no customer fields: do not solicit a POST until the
+// existing service proves it is ready for an intake request.
+function trustedReadiness(value){
+ return value?.service==='niterun-services-intake'&&value.state==='ready'&&
+  value.payment_processing===false&&value.booking_confirmation===false&&
+  value.marketing_enrollment===false;
+}
+async function verifyIntakeReady(form){
+ const status=form.querySelector('.form-status');
+ const button=form.querySelector('button[type="submit"]');
+ form.dataset.intakeReady='false';
+ button.disabled=true;
+ publishStatus(status,'','Checking online request availability…');
+ const abort=new AbortController();
+ const timer=setTimeout(()=>abort.abort(),READINESS_TIMEOUT_MS);
+ try{
+  const response=await fetch(form.dataset.endpoint,{method:'GET',mode:'cors',
+   headers:{'Accept':'application/json'},credentials:'omit',cache:'no-store',signal:abort.signal});
+  if(!response.ok||!trustedReadiness(await response.json()))throw new Error('not-ready');
+  form.dataset.intakeReady='true';
+  button.disabled=false;
+  publishStatus(status,'','Online inquiries are available. A request is not a confirmed booking.');
+ }catch{
+  publishStatus(status,'error','Online intake is temporarily unavailable. No request was sent.',true);
+ }finally{clearTimeout(timer)}
+}
 
 function onlyText(value,max){return String(value||'').trim().slice(0,max)}
 function publishStatus(node,kind,message,withEmail=false){
@@ -50,6 +78,10 @@ function readForm(form){
 async function submitRequest(form){
  const status=form.querySelector('.form-status');
  const button=form.querySelector('button[type="submit"]');
+ if(form.dataset.intakeReady!=='true'){
+  publishStatus(status,'error','Online intake is not verified. No request was sent.',true);
+  return;
+ }
  if(form.dataset.pending==='true')return;
  if(!form.checkValidity()){
   form.reportValidity();
@@ -115,6 +147,7 @@ document.querySelectorAll('form[data-intake-form]').forEach(form=>{
  const segments=window.location.pathname.split('/').filter(Boolean);
  form.dataset.locationForm=segments.length>=2&&VALID_SERVICES.has(segments[segments.length-2])&&VALID_CITIES.has(segments[segments.length-1])?'true':'false';
  form.addEventListener('submit',event=>{event.preventDefault();void submitRequest(form)});
+ void verifyIntakeReady(form);
 });
 document.querySelectorAll('.mobile-menu').forEach(menu=>{
  menu.querySelectorAll('a').forEach(link=>link.addEventListener('click',()=>menu.open=false));
