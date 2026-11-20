@@ -1,0 +1,42 @@
+name: NiteRun Services - Private intake contract review
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/services-intake/**'
+      - 'assets/site.js'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'package.json'
+      - '.github/workflows/intake-contract-review.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: services-intake-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Source tests and static build only
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Exact source receipt
+        run: git rev-parse HEAD
+      - name: Read-only intake, consent, security and site tests
+        run: npm run check
+      - name: JavaScript syntax checks
+        run: |
+          node --check assets/site.js
+          node --check scripts/build.mjs
+          node --check scripts/health-check.mjs
+      # No deploy, workflow secrets, Stripe actions, live API probes or production writes.
