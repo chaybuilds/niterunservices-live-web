@@ -20,7 +20,7 @@ async function probe({url='https://db.invalid', secret='scoped-private-test-key'
     if(db==='throws')throw Error('connection_failed');
     return {from(table){calls.push('from:'+table);return {
       select(column,opts){calls.push('select:'+column+':'+opts?.head);return {
-        async limit(n){calls.push('limit:'+n);return {error:db==='error'?{code:'database_unavailable'}:null};}
+        async limit(n){calls.push('limit:'+n);return db==='missing-proof'?{}:{error:db==='error'?{code:'database_unavailable'}:db==='false-error'?false:null};}
       };}
     };}};
   };
@@ -42,6 +42,14 @@ test('database permission or table errors refuse readiness',async()=>{
   assert.ok(r.calls.includes('from:nr_service_requests_v1'));
   assert.ok(r.calls.includes('select:id:true'));
 });
+test('malformed database results cannot claim a healthy backing table',async()=>{
+ for(const db of ['missing-proof','false-error']){
+  const r=await probe({db});
+  assert.equal(r.status,503);
+  assert.equal(r.body.state,'unavailable');
+ }
+});
+
 test('database transport failures refuse readiness',async()=>{
   const r=await probe({db:'throws'});
   assert.equal(r.status,503);
