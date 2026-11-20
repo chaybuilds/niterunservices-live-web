@@ -3,6 +3,7 @@ const VALID_SERVICES=new Set(['cleaning','detailing','washing','holiday-lights']
 const VALID_CITIES=new Set(['wilmington','raleigh','charlotte']);
 const VALID_TIMING=new Set(['asap','week','month','flexible']);
 const API_TIMEOUT_MS=13000;
+const READINESS_TIMEOUT_MS=5500;
 
 function onlyText(value,max){return String(value||'').trim().slice(0,max)}
 function publishStatus(node,kind,message,withEmail=false){
@@ -49,6 +50,10 @@ function readForm(form){
 }
 async function submitRequest(form){
  const status=form.querySelector('.form-status');
+ if(form.dataset.intakeReady!=='true'){
+  publishStatus(status,'error','Online requests are not currently verified as available.',true);
+  return;
+ }
  const button=form.querySelector('button[type="submit"]');
  if(form.dataset.pending==='true')return;
  if(!form.checkValidity()){
@@ -112,9 +117,38 @@ async function submitRequest(form){
  }
 }
 document.querySelectorAll('form[data-intake-form]').forEach(form=>{
+ const button=form.querySelector('[data-intake-submit]');
+ const status=form.querySelector('.form-status');
  const segments=window.location.pathname.split('/').filter(Boolean);
  form.dataset.locationForm=segments.length>=2&&VALID_SERVICES.has(segments[segments.length-2])&&VALID_CITIES.has(segments[segments.length-1])?'true':'false';
+ form.dataset.intakeReady='false';
  form.addEventListener('submit',event=>{event.preventDefault();void submitRequest(form)});
+ publishStatus(status,'','Checking secure request availability…');
+ // An authenticated page is not proof that its independent intake service works.
+ // Only a read-only, affirmative health response can enable sending contact data.
+ void (async()=>{
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),READINESS_TIMEOUT_MS);
+  try{
+   const response=await fetch(form.dataset.endpoint,{
+    method:'GET',mode:'cors',credentials:'omit',signal:controller.signal,
+    headers:{'Accept':'application/json'}
+   });
+   if(!response.ok)throw Error('intake-unavailable');
+   const health=await response.json();
+   if(health?.state!=='ready'||health?.payment_processing!==false||
+      health?.booking_confirmation!==false||health?.marketing_enrollment!==false){
+    throw Error('intake-unverified');
+   }
+   // No POST or entitlement is activated by this read-only readiness probe.
+   form.dataset.intakeReady='true';
+   button.type='submit';
+   button.disabled=false;
+   publishStatus(status,'','Secure inquiry form available. A request is not a booking.');
+  }catch{
+   publishStatus(status,'error','Online intake is currently unavailable. Please email us instead.',true);
+  }finally{clearTimeout(timer)}
+ })();
 });
 document.querySelectorAll('.mobile-menu').forEach(menu=>{
  menu.querySelectorAll('a').forEach(link=>link.addEventListener('click',()=>menu.open=false));

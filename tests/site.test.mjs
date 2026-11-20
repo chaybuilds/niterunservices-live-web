@@ -73,6 +73,25 @@ test('every request form has explicit consent, protected inquiry language, honey
   assert.match(doc,/services-intake/,'Missing public intake endpoint '+p);
  }
 });
+test('online intake stays disabled without script or positive read-only service health',()=>{
+ const pages=['index.html',...services.map(s=>'services/'+s+'/index.html'),
+  ...services.flatMap(s=>cities.map(c=>s+'/'+c+'/index.html'))];
+ for(const page of pages){
+  const html=read(page);
+  assert.match(html,/<form class="request-form" method="post" data-intake-form/,'No default GET with contact data: '+page);
+  assert.match(html,/<button[^>]+type="button" data-intake-submit disabled>/,'Submit button must start inert: '+page);
+  assert.match(html,/<noscript>.*Email NiteRun Services instead\./s,'Missing no-script email fallback: '+page);
+ }
+ const js=read('assets/site.js');
+ assert.match(js,/form\.dataset\.intakeReady='false'/);
+ assert.match(js,/if\(form\.dataset\.intakeReady!=='true'\)/);
+ assert.match(js,/method:'GET'/);
+ for(const flag of ['state','payment_processing','booking_confirmation','marketing_enrollment']){
+  assert.ok(js.includes(flag),'Missing verified readiness field '+flag);
+ }
+ assert.match(js,/form\.dataset\.intakeReady='true';\s*button\.type='submit';\s*button\.disabled=false/);
+ assert.match(js,/Online intake is currently unavailable/);
+});
 test('static files avoid trackers, payment processors, hardcoded keys and fake testimonials',()=>{
  const html=read('index.html'),js=read('assets/site.js');
  assert.doesNotMatch(html,/stripe\.com|checkout\.stripe|facebook\.net\/tr|gtag\(/i);
