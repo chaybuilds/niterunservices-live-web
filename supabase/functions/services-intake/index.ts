@@ -132,14 +132,18 @@ Deno.serve(async(req:Request)=>{
   full_name,email,phone,postal_code,service_key:service,city_key:city,timing_key:timing,
   details,source_utm:source,campaign_utm:campaign,landing_path,ip_hash,submission_hash,
   contact_consent_at:now.toISOString(),stage:'new',provider_verified:false,verified_payment_cents:0
- });
- // Only explicit null error from the insert can authorize an accepted receipt.
- // Missing or malformed result fields must never be mistaken for persistence.
+ }).select('id').single();
+ // An HTTP-success-looking insert is not enough: require an authoritative
+ // returned row from the private requests table before claiming acceptance.
  const insertError=insertResult?.error;
  if(insertError!==null){
   if(insertError?.code==='23505')
    return response({accepted:true,duplicate:true,booking_confirmed:false},200,origin);
   return response({error:'Service temporarily unavailable.'},503,origin);
  }
+ const savedId=insertResult?.data?.id;
+ if(typeof savedId!=='string'||
+   !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(savedId))
+  return response({error:'Service temporarily unavailable.'},503,origin);
  return response({accepted:true,duplicate:false,booking_confirmed:false},201,origin);
 });
