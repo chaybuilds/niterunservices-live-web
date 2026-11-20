@@ -113,19 +113,31 @@ Deno.serve(async(req:Request)=>{
  const since=new Date(now.getTime()-15*60*1000).toISOString();
  const {count:recentCount,error:rateError}=await client.from('nr_service_requests_v1')
   .select('id',{head:true,count:'exact'}).eq('ip_hash',ip_hash).gte('created_at',since);
- if(rateError)return response({error:'Service temporarily unavailable.'},503,origin);
- if((recentCount||0)>=5)return response({error:'Please try again later.'},429,origin);
- const {data:existing,error:dupError}=await client.from('nr_service_requests_v1')
+ // An ambiguous count cannot prove the per-client limit was respected.
+ if(rateError!==null||!Number.isSafeInteger(recentCount)||recentCount<0)
+  return response({error:'Service temporarily unavailable.'},503,origin);
+ if(recentCount>=5)return response({error:'Please try again later.'},429,origin);
+ const duplicateResult=await client.from('nr_service_requests_v1')
   .select('id').eq('submission_hash',submission_hash).maybeSingle();
- if(dupError)return response({error:'Service temporarily unavailable.'},503,origin);
- if(existing)return response({accepted:true,duplicate:true,booking_confirmed:false},200,origin);
- const {error}=await client.from('nr_service_requests_v1').insert({
+ if(!duplicateResult||duplicateResult.error!==null||
+   !Object.prototype.hasOwnProperty.call(duplicateResult,'data'))
+  return response({error:'Service temporarily unavailable.'},503,origin);
+ const existing=duplicateResult.data;
+ if(existing!==null){
+  if(typeof existing!=='object'||typeof existing.id!=='string'||!existing.id)
+   return response({error:'Service temporarily unavailable.'},503,origin);
+  return response({accepted:true,duplicate:true,booking_confirmed:false},200,origin);
+ }
+ const insertResult=await client.from('nr_service_requests_v1').insert({
   full_name,email,phone,postal_code,service_key:service,city_key:city,timing_key:timing,
   details,source_utm:source,campaign_utm:campaign,landing_path,ip_hash,submission_hash,
   contact_consent_at:now.toISOString(),stage:'new',provider_verified:false,verified_payment_cents:0
  });
- if(error){
-  if(error.code==='23505')
+ // Only explicit null error from the insert can authorize an accepted receipt.
+ // Missing or malformed result fields must never be mistaken for persistence.
+ const insertError=insertResult?.error;
+ if(insertError!==null){
+  if(insertError?.code==='23505')
    return response({accepted:true,duplicate:true,booking_confirmed:false},200,origin);
   return response({error:'Service temporarily unavailable.'},503,origin);
  }
