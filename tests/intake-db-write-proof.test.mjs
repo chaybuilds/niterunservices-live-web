@@ -15,7 +15,8 @@ const args=['client','response','origin','ip_hash','submission_hash','since','no
  'source','campaign','landing_path'];
 const handle=runInNewContext('(async ('+args.join(',')+') => { '+snippet+' })',{}, {timeout:1000});
 
-async function probe({rate={count:0,error:null},duplicate={data:null,error:null},insert={error:null}}={}){
+async function probe({rate={count:0,error:null},duplicate={data:null,error:null},
+ insert={data:{id:'e680ab88-33df-4024-ad62-37b81c06746c'},error:null}}={}){
  const calls=[];
  const client={from(table){
   assert.equal(table,'nr_service_requests_v1');
@@ -31,7 +32,9 @@ async function probe({rate={count:0,error:null},duplicate={data:null,error:null}
    },
    insert(record){calls.push('insert');assert.equal(record.verified_payment_cents,0);
     assert.equal(record.provider_verified,false);
-    return insert;}
+    return {select(field){assert.equal(field,'id');return {
+     single(){return insert;}
+    };}};}
   };
  }};
  const response=(body,status)=>({status,body});
@@ -50,6 +53,17 @@ test('explicit database success produces an unconfirmed intake receipt',async()=
  assert.deepEqual(JSON.parse(JSON.stringify(result.body)),{accepted:true,duplicate:false,booking_confirmed:false});
  assert.deepEqual(calls,['rate','duplicate','insert']);
 });
+test('null error without a returned persisted row is not an accepted inquiry',async()=>{
+ for(const insert of [{error:null,data:null},{error:null},
+  {error:null,data:{}},{error:null,data:{id:'not-a-uuid'}},
+  {error:null,data:{id:123}}]){
+  const {result,calls}=await probe({insert});
+  assert.equal(result.status,503,'explicit persisted row identity required');
+  assert.equal(result.body.accepted,undefined);
+  assert.deepEqual(calls,['rate','duplicate','insert']);
+ }
+});
+
 test('ambiguous write result cannot claim receipt acceptance',async()=>{
  for(const insert of [{},{error:undefined},{error:false}]){
   const {result,calls}=await probe({insert});
