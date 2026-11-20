@@ -40,7 +40,7 @@ function requestForm(depth,selectedService='',selectedCity=''){
  const serviceOpts=SERVICES.map(s=>({slug:s.slug,name:s.name+' — '+s.type}));
  const cityOpts=CITIES.map(c=>({slug:c.slug,name:c.name+', NC'}));
  return `
- <form class="request-form" data-intake-form data-endpoint="${API}" novalidate>
+ <form class="request-form" method="post" data-intake-form data-endpoint="${API}" novalidate>
  <div class="form-title"><span class="form-kicker">REQUEST · 01</span><h2>Tell us what you need.</h2><p>Start with the basics. A request is <strong>not</strong> a confirmed booking or an obligation to purchase.</p></div>
  <div class="form-grid">
  <label class="field"><span>Service <b aria-label="required">*</b></span>${select('service',serviceOpts,selectedService,'Select service')}</label>
@@ -54,9 +54,10 @@ function requestForm(depth,selectedService='',selectedCity=''){
  <div class="hp-field" aria-hidden="true"><label>Website <input tabindex="-1" autocomplete="off" name="website"></label></div>
  <label class="consent field-wide"><input type="checkbox" name="consent" required><span>I agree to be contacted about <em>this service request</em>. I understand availability, provider qualifications and pricing must be confirmed before booking. This does not subscribe me to marketing. <a href="${href(depth,'privacy/')}">Privacy</a>.</span></label>
  </div>
- <div class="form-footer"><button class="btn btn-primary submit" type="submit">Send my request ${icon('arrow',19)}</button><span class="form-mini">Free to ask · No charge to submit</span></div>
+ <div class="form-footer"><button class="btn btn-primary submit" type="button" data-intake-submit disabled>Send my request ${icon('arrow',19)}</button><span class="form-mini">Free to ask · No charge to submit</span></div>
  <div class="form-status" role="status" aria-live="polite" aria-atomic="true"></div>
- </form>`;
+ </form>
+ <noscript><p class="form-status error">Online requests require JavaScript and a working intake service. <a href="mailto:chayson@niterun.com?subject=NiteRun%20Services%20request">Email NiteRun Services instead.</a></p></noscript>`;
 }
 function mainNav(depth){
  const links=[['Services','services/'],['Locations','#locations'],['How it works','#how'],['About','about/']];
