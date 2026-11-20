@@ -54,7 +54,8 @@ Deno.serve(async(req:Request)=>{
     const client=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
     const {error}=await client.from('nr_service_requests_v1')
      .select('id',{head:true}).limit(1);
-    ready=!error;
+    // Only an explicit successful DB result can mark intake as available.
+    ready=error===null;
    }catch{ready=false}
   }
   return response({
