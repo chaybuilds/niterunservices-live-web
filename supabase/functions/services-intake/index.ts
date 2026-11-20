@@ -44,10 +44,24 @@ Deno.serve(async(req:Request)=>{
  const origin=req.headers.get('origin')||undefined;
  if(origin&&!allowedOrigins.has(origin))return response({error:'Origin not allowed.'},403);
  if(req.method==='OPTIONS')return response({ok:true},200,origin);
- if(req.method==='GET')return response({
-  service:'niterun-services-intake',state:'ready',
-  payment_processing:false,booking_confirmation:false,marketing_enrollment:false
- },200,origin);
+ if(req.method==='GET'){
+  // Operational readiness must include the real backing table, not only an alive worker.
+  const url=Deno.env.get('SUPABASE_URL');
+  const secret=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  let ready=false;
+  if(url&&secret){
+   try{
+    const client=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
+    const {error}=await client.from('nr_service_requests_v1')
+     .select('id',{head:true}).limit(1);
+    ready=!error;
+   }catch{ready=false}
+  }
+  return response({
+   service:'niterun-services-intake',state:ready?'ready':'unavailable',
+   payment_processing:false,booking_confirmation:false,marketing_enrollment:false
+  },ready?200:503,origin);
+ }
  if(req.method!=='POST')return response({error:'Method not allowed.'},405,origin);
  if(!origin||!allowedOrigins.has(origin))return response({error:'Origin required.'},403);
  if(!(req.headers.get('content-type')||'').toLowerCase().includes('application/json'))
